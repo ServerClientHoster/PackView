@@ -1,0 +1,889 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>EaglerCraft Resource Pack Viewer</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #101010;
+    color: white;
+    font-family: Arial, sans-serif;
+}
+
+/* HEADER */
+
+header {
+    background: #191919;
+    padding: 25px;
+    text-align: center;
+    border-bottom: 1px solid #333;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 30px;
+}
+
+header p {
+    color: #999;
+    margin-bottom: 0;
+}
+
+/* TOOLBAR */
+
+.toolbar {
+    background: #171717;
+    padding: 15px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid #333;
+}
+
+button,
+.upload {
+    background: #292929;
+    color: white;
+    border: 1px solid #555;
+    padding: 10px 15px;
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+button:hover,
+.upload:hover {
+    background: #3a3a3a;
+}
+
+input[type="file"] {
+    display: none;
+}
+
+#search {
+    flex: 1;
+    min-width: 200px;
+
+    background: #222;
+    color: white;
+
+    border: 1px solid #555;
+    border-radius: 7px;
+
+    padding: 10px;
+}
+
+/* PATH */
+
+#path {
+    padding: 12px 18px;
+    color: #aaa;
+    border-bottom: 1px solid #292929;
+}
+
+/* GRID */
+
+#grid {
+    padding: 20px;
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            auto-fill,
+            minmax(130px, 1fr)
+        );
+
+    gap: 12px;
+}
+
+/* CARDS */
+
+.card {
+    background: #1a1a1a;
+
+    border: 1px solid #303030;
+
+    border-radius: 9px;
+
+    padding: 10px;
+
+    text-align: center;
+
+    cursor: pointer;
+
+    min-height: 145px;
+}
+
+.card:hover {
+    background: #232323;
+    border-color: #777;
+}
+
+.card img {
+    width: 96px;
+    height: 96px;
+
+    object-fit: contain;
+
+    image-rendering: pixelated;
+
+    background: #0c0c0c;
+
+    border-radius: 5px;
+}
+
+.card-name {
+    margin-top: 8px;
+
+    font-size: 12px;
+
+    color: #ddd;
+
+    word-break: break-word;
+}
+
+.folder-icon {
+    font-size: 55px;
+
+    height: 96px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+}
+
+/* EMPTY */
+
+#empty {
+    text-align: center;
+
+    padding: 80px 20px;
+
+    color: #777;
+}
+
+/* MODAL */
+
+#modal {
+    display: none;
+
+    position: fixed;
+
+    inset: 0;
+
+    background: rgba(0,0,0,.85);
+
+    align-items: center;
+
+    justify-content: center;
+
+    padding: 20px;
+
+    z-index: 100;
+}
+
+#modalBox {
+    background: #1b1b1b;
+
+    border: 1px solid #555;
+
+    border-radius: 12px;
+
+    padding: 20px;
+
+    max-width: 90vw;
+
+    max-height: 90vh;
+
+    text-align: center;
+}
+
+#preview {
+    max-width: 70vw;
+
+    max-height: 70vh;
+
+    image-rendering: pixelated;
+
+    background: #0b0b0b;
+}
+
+#modalName {
+    margin-top: 15px;
+
+    color: #ccc;
+
+    word-break: break-all;
+}
+
+#close {
+    float: right;
+}
+</style>
+</head>
+
+
+<body>
+
+<header>
+
+<h1>🧱 EaglerCraft Resource Pack Viewer</h1>
+
+<p>
+Upload a Minecraft / EaglerCraft resource pack
+</p>
+
+</header>
+
+
+<div class="toolbar">
+
+<label class="upload">
+
+📦 Upload Resource Pack
+
+<input
+    type="file"
+    id="file"
+    accept=".zip"
+>
+
+</label>
+
+
+<button onclick="goUp()">
+⬆ Up
+</button>
+
+
+<button onclick="goHome()">
+🏠 Assets
+</button>
+
+
+<input
+    id="search"
+    type="text"
+    placeholder="🔍 Search textures..."
+    disabled
+>
+
+</div>
+
+
+<div id="path">
+No resource pack loaded
+</div>
+
+
+<div id="grid"></div>
+
+
+<div id="empty">
+
+<h2>📦 No Resource Pack</h2>
+
+<p>
+Upload a <b>.zip</b> resource pack to start browsing.
+</p>
+
+</div>
+
+
+<!-- IMAGE PREVIEW -->
+
+<div id="modal">
+
+<div id="modalBox">
+
+<button id="close" onclick="closeModal()">
+✕
+</button>
+
+<br>
+
+<img id="preview">
+
+<div id="modalName"></div>
+
+</div>
+
+</div>
+
+
+<!-- ZIP LIBRARY -->
+
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+
+<script>
+
+let zip = null;
+
+let files = [];
+
+let currentPath = "assets";
+
+let objectURLs = [];
+
+
+const fileInput =
+    document.getElementById("file");
+
+const grid =
+    document.getElementById("grid");
+
+const empty =
+    document.getElementById("empty");
+
+const pathBox =
+    document.getElementById("path");
+
+const search =
+    document.getElementById("search");
+
+
+/* =========================
+   LOAD RESOURCE PACK
+========================= */
+
+fileInput.addEventListener(
+    "change",
+    async function(event) {
+
+        const file =
+            event.target.files[0];
+
+        if (!file) {
+            return;
+        }
+
+        try {
+
+            zip =
+                await JSZip.loadAsync(file);
+
+            files =
+                Object.keys(zip.files)
+                .filter(function(name) {
+
+                    return !zip.files[name].dir;
+
+                });
+
+            currentPath = "assets";
+
+            search.disabled = false;
+
+            search.value = "";
+
+            render();
+
+        }
+
+        catch(error) {
+
+            alert(
+                "Could not open this ZIP file."
+            );
+
+        }
+
+    }
+);
+
+
+/* =========================
+   SEARCH
+========================= */
+
+search.addEventListener(
+    "input",
+    function() {
+
+        render();
+
+    }
+);
+
+
+/* =========================
+   RENDER
+========================= */
+
+function render() {
+
+    grid.innerHTML = "";
+
+    objectURLs.forEach(
+        function(url) {
+
+            URL.revokeObjectURL(url);
+
+        }
+    );
+
+    objectURLs = [];
+
+
+    if (!zip) {
+
+        empty.style.display = "block";
+
+        pathBox.textContent =
+            "No resource pack loaded";
+
+        return;
+
+    }
+
+
+    empty.style.display = "none";
+
+
+    let prefix;
+
+
+    if (currentPath === "assets") {
+
+        prefix = "";
+
+    }
+
+    else {
+
+        prefix =
+            currentPath + "/";
+
+    }
+
+
+    const query =
+        search.value
+        .toLowerCase()
+        .trim();
+
+
+    /* =========================
+       FIND FILES
+    ========================= */
+
+    let visibleFiles =
+        files.filter(function(name) {
+
+            if (!name.startsWith(prefix)) {
+
+                return false;
+
+            }
+
+
+            let rest =
+                name.substring(prefix.length);
+
+
+            if (rest.includes("/")) {
+
+                return false;
+
+            }
+
+
+            if (
+                query &&
+                !name.toLowerCase()
+                    .includes(query)
+            ) {
+
+                return false;
+
+            }
+
+
+            return true;
+
+        });
+
+
+    /* =========================
+       FIND FOLDERS
+    ========================= */
+
+    let folders =
+        new Set();
+
+
+    if (!query) {
+
+        files.forEach(
+            function(name) {
+
+                if (!name.startsWith(prefix)) {
+
+                    return;
+
+                }
+
+
+                let rest =
+                    name.substring(prefix.length);
+
+
+                let slash =
+                    rest.indexOf("/");
+
+
+                if (slash > 0) {
+
+                    folders.add(
+                        rest.substring(
+                            0,
+                            slash
+                        )
+                    );
+
+                }
+
+            }
+        );
+
+    }
+
+
+    pathBox.textContent =
+        "📁 " +
+        currentPath +
+        " • " +
+        visibleFiles.length +
+        " file(s)";
+
+
+    /* =========================
+       DISPLAY FOLDERS
+    ========================= */
+
+    Array.from(folders)
+    .sort()
+    .forEach(
+        function(folder) {
+
+            const card =
+                document.createElement("div");
+
+            card.className = "card";
+
+
+            card.innerHTML =
+
+                '<div class="folder-icon">📁</div>' +
+
+                '<div class="card-name">' +
+
+                escapeHTML(folder) +
+
+                '</div>';
+
+
+            card.onclick =
+                function() {
+
+                    currentPath =
+                        prefix + folder;
+
+                    render();
+
+                };
+
+
+            grid.appendChild(card);
+
+        }
+    );
+
+
+    /* =========================
+       DISPLAY FILES
+    ========================= */
+
+    visibleFiles
+    .sort()
+    .forEach(
+        function(name) {
+
+            addFile(name);
+
+        }
+    );
+
+}
+
+
+/* =========================
+   ADD FILE
+========================= */
+
+async function addFile(name) {
+
+    const card =
+        document.createElement("div");
+
+    card.className = "card";
+
+
+    const shortName =
+        name.split("/").pop();
+
+
+    card.innerHTML =
+
+        '<div class="file-preview">' +
+
+        'Loading...' +
+
+        '</div>' +
+
+        '<div class="card-name">' +
+
+        escapeHTML(shortName) +
+
+        '</div>';
+
+
+    grid.appendChild(card);
+
+
+    const extension =
+        shortName
+        .split(".")
+        .pop()
+        .toLowerCase();
+
+
+    if (
+        extension === "png" ||
+        extension === "jpg" ||
+        extension === "jpeg" ||
+        extension === "webp" ||
+        extension === "gif"
+    ) {
+
+        try {
+
+            const blob =
+                await zip
+                .file(name)
+                .async("blob");
+
+
+            const url =
+                URL.createObjectURL(blob);
+
+
+            objectURLs.push(url);
+
+
+            card.querySelector(
+                ".file-preview"
+            ).innerHTML =
+
+                '<img src="' +
+                url +
+                '" alt="">';
+
+
+            card.onclick =
+                function() {
+
+                    openModal(
+                        url,
+                        name
+                    );
+
+                };
+
+        }
+
+        catch(error) {
+
+            card.querySelector(
+                ".file-preview"
+            ).textContent = "❌";
+
+        }
+
+    }
+
+    else {
+
+        card.querySelector(
+            ".file-preview"
+        ).innerHTML =
+
+            '<div class="folder-icon">📄</div>';
+
+    }
+
+}
+
+
+/* =========================
+   GO UP
+========================= */
+
+function goUp() {
+
+    if (!zip) {
+        return;
+    }
+
+
+    if (currentPath === "assets") {
+
+        return;
+
+    }
+
+
+    let parts =
+        currentPath.split("/");
+
+
+    parts.pop();
+
+
+    if (parts.length === 0) {
+
+        currentPath = "assets";
+
+    }
+
+    else {
+
+        currentPath =
+            parts.join("/");
+
+    }
+
+
+    render();
+
+}
+
+
+/* =========================
+   HOME
+========================= */
+
+function goHome() {
+
+    if (!zip) {
+        return;
+    }
+
+
+    currentPath = "assets";
+
+    search.value = "";
+
+    render();
+
+}
+
+
+/* =========================
+   MODAL
+========================= */
+
+function openModal(url, name) {
+
+    document.getElementById(
+        "preview"
+    ).src = url;
+
+
+    document.getElementById(
+        "modalName"
+    ).textContent = name;
+
+
+    document.getElementById(
+        "modal"
+    ).style.display = "flex";
+
+}
+
+
+function closeModal() {
+
+    document.getElementById(
+        "modal"
+    ).style.display = "none";
+
+}
+
+
+/* Close when clicking background */
+
+document.getElementById(
+    "modal"
+).addEventListener(
+    "click",
+    function(event) {
+
+        if (
+            event.target.id === "modal"
+        ) {
+
+            closeModal();
+
+        }
+
+    }
+);
+
+
+/* =========================
+   HTML ESCAPING
+========================= */
+
+function escapeHTML(text) {
+
+    return text.replace(
+        /[&<>"']/g,
+        function(character) {
+
+            return {
+
+                "&": "&amp;",
+
+                "<": "&lt;",
+
+                ">": "&gt;",
+
+                '"': "&quot;",
+
+                "'": "&#039;"
+
+            }[character];
+
+        }
+    );
+
+}
+
+</script>
+
+</body>
+</html>
+```
